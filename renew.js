@@ -63,10 +63,11 @@ async function sendTG(statusIcon, statusText, extra, imagePath) {
     var time = new Date(Date.now() + 8 * 3600000).toISOString().replace('T', ' ').slice(0, 19);
     var text = 'XServer 延期提醒\n' + statusIcon + ' ' + statusText + '\n' + extra + '\n账号: ' + ACC + '\n时间: ' + time;
     if (imagePath && fs.existsSync(imagePath)) {
+      var fileData = fs.readFileSync(imagePath);
       var fd = new FormData();
       fd.append('chat_id', TG_ID);
       fd.append('caption', text);
-      fd.append('photo', fs.createReadStream(imagePath), path.basename(imagePath));
+      fd.append('photo', new Blob([fileData], { type: 'image/png' }), path.basename(imagePath));
       var res = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendPhoto', { method: 'POST', body: fd });
       if (res.ok) console.log('✅ TG 通知已发送');
       else console.log('⚠️ TG 发送失败:', res.status, await res.text());
@@ -98,15 +99,19 @@ function checkScheduling() {
 async function parseRemainingMinutes(page) {
   try {
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForTimeout(2000);
-    var text = await page.locator('body').innerText();
+    await page.waitForTimeout(3000);
+    var text = await page.evaluate(function() {
+      var el = document.querySelector('[class*="remain"], [class*="time"], [class*="period"]');
+      if (el) return el.innerText;
+      return document.body.innerText;
+    });
     var m = text.match(/残り(\d+)時間(\d+)分/);
     if (m) { console.log('⏱️ 剩余时间: ' + m[1] + '小时' + m[2] + '分钟'); return parseInt(m[1]) * 60 + parseInt(m[2]); }
     m = text.match(/残り(\d+)時間/);
     if (m) { console.log('⏱️ 剩余时间: ' + m[1] + '小时'); return parseInt(m[1]) * 60; }
     m = text.match(/(\d+)時間(\d+)分/);
-    if (m) { console.log('⏱️ 剩余时间: ' + m[1] + '小时' + m[2] + '分钟（无前缀）'); return parseInt(m[1]) * 60 + parseInt(m[2]); }
-    console.log('⚠️ 未找到剩余时间，页面内容片段:', text.substring(0, 200));
+    if (m) { console.log('⏱️ 剩余时间: ' + m[1] + '小时' + m[2] + '分钟'); return parseInt(m[1]) * 60 + parseInt(m[2]); }
+    console.log('⚠️ 未找到剩余时间');
     return null;
   } catch (e) { console.log('⚠️ 解析失败:', e.message); return null; }
 }
